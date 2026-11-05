@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <title>Russian Roulette Mobile</title>
+  <style>
+    :root {
+      --bg1: #0d1017;
+      --bg2: #181d29;
+      --panel: rgba(255,255,255,0.08);
+      --panel2: rgba(255,255,255,0.14);
+      --text: #f5f7fb;
+      --muted: #b8c0d3;
+      --accent: #ff4d4f;
+      --accent2: #ff9f1a;
+      --safe: #4da3ff;
+      --empty: #697386;
+      --shadow: 0 12px 35px rgba(0,0,0,0.45);
+      --radius: 18px;
+      --vh: 1vh;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; user-select: none; }
+    html, body {
+      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      background: radial-gradient(circle at 20% 20%, #1b2130 0%, var(--bg1) 40%, #090c12 100%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Apple SD Gothic Neo, Noto Sans KR, sans-serif;
+      touch-action: manipulation;
+    }
+
+    body { position: fixed; inset: 0; }
+
+    #app {
+      width: 100vw;
+      height: 100vh;
+      padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(10px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      gap: 10px;
+    }
+
+    .hud {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .stat {
+      flex: 1;
+      min-height: 56px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.05));
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 18px;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(6px);
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: clamp(12px, 1.8vw, 14px);
+      line-height: 1;
+      margin-bottom: 6px;
+      letter-spacing: 0.02em;
+    }
+
+    .value {
+      font-size: clamp(22px, 4vw, 34px);
+      font-weight: 800;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    .middle {
+      min-height: 0;
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr) 116px;
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .left-controls, .right-controls {
+      display: flex;
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .scene {
+      position: relative;
+      min-width: 0;
+      overflow: hidden;
+      background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.03));
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 26px;
+      box-shadow: var(--shadow);
+    }
+
+    .gun-wrap {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform-origin: 70% 50%;
+      transition: transform 120ms ease;
+    }
+
+    .gun-wrap.recoil {
+      transform: translateX(-18px) rotate(-2deg) scale(0.985);
+    }
+
+    .gun-svg {
+      width: min(94%, 880px);
+      height: auto;
+      filter: drop-shadow(0 18px 26px rgba(0,0,0,0.5));
+    }
+
+    .muzzle-flash {
+      position: absolute;
+      right: 2%;
+      top: 39%;
+      width: min(14vw, 110px);
+      aspect-ratio: 1;
+      pointer-events: none;
+      opacity: 0;
+      transform: scale(0.4);
+      background:
+        radial-gradient(circle, rgba(255,246,180,1) 0 18%, rgba(255,201,84,0.95) 18% 38%, rgba(255,128,0,0.85) 38% 55%, rgba(255,85,0,0.28) 55% 72%, rgba(255,85,0,0) 72% 100%);
+      clip-path: polygon(50% 0%, 60% 25%, 82% 8%, 74% 34%, 100% 36%, 79% 50%, 100% 64%, 73% 67%, 84% 92%, 58% 77%, 50% 100%, 41% 76%, 16% 90%, 27% 66%, 0% 63%, 23% 49%, 0% 37%, 26% 33%, 17% 9%, 40% 24%);
+      filter: blur(0.4px) drop-shadow(0 0 16px rgba(255,177,0,0.7));
+    }
+
+    .muzzle-flash.show {
+      animation: flash 240ms ease-out;
+    }
+
+    @keyframes flash {
+      0% { opacity: 0; transform: scale(0.3); }
+      15% { opacity: 1; transform: scale(1.06); }
+      100% { opacity: 0; transform: scale(1.35); }
+    }
+
+    .status-strip {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 6px 0 2px;
+    }
+
+    .chambers {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      width: min(92vw, 540px);
+      margin: 0 auto;
+    }
+
+    .slot {
+      height: 18px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.1);
+      box-shadow: inset 0 1px 2px rgba(255,255,255,0.08), inset 0 -1px 4px rgba(0,0,0,0.35);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .slot.current::after {
+      content: '';
+      position: absolute;
+      inset: 2px;
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.45);
+    }
+
+    .slot.emptyHit {
+      background: linear-gradient(180deg, rgba(77,163,255,0.45), rgba(77,163,255,0.18));
+      border-color: rgba(77,163,255,0.5);
+    }
+
+    .slot.bullet {
+      background: linear-gradient(180deg, rgba(255,90,90,0.8), rgba(162,16,16,0.45));
+      border-color: rgba(255,120,120,0.8);
+    }
+
+    .slot.bullet::before {
+      content: '•';
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      color: #fff4e0;
+      text-shadow: 0 0 6px rgba(255,255,255,0.65);
+      transform: translateY(-1px);
+    }
+
+    .btn {
+      border: none;
+      outline: none;
+      color: white;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease;
+    }
+
+    .btn:active { transform: scale(0.97); }
+
+    .reload-btn {
+      width: 78px;
+      height: 78px;
+      border-radius: 22px;
+      background: linear-gradient(180deg, #2c3445, #171d29);
+      border: 1px solid rgba(255,255,255,0.12);
+      color: #d9e2f2;
+      font-size: 15px;
+      letter-spacing: -0.02em;
+    }
+
+    .fire-btn {
+      width: min(104px, 22vw);
+      height: min(104px, 22vw);
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #ff7c7f 0%, #ff5256 30%, #d61d25 72%, #851015 100%);
+      border: 4px solid rgba(255,255,255,0.15);
+      font-size: clamp(20px, 2.8vw, 28px);
+      letter-spacing: -0.03em;
+      text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+      position: relative;
+    }
+
+    .fire-btn::after {
+      content: '';
+      position: absolute;
+      inset: 9px;
+      border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.25);
+    }
+
+    .fire-btn.disabled, .reload-btn.disabled {
+      opacity: 0.5;
+      filter: grayscale(0.25);
+      cursor: default;
+    }
+
+    .portrait-lock {
+      position: fixed;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(9,11,16,0.96), rgba(9,11,16,0.98));
+      display: none;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      padding: 24px;
+      z-index: 99;
+      color: white;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      line-height: 1.45;
+    }
+
+    @media (orientation: portrait) {
+      .portrait-lock { display: flex; }
+    }
+
+    @media (max-width: 740px) {
+      .middle { grid-template-columns: 76px minmax(0, 1fr) 96px; }
+      .reload-btn { width: 66px; height: 66px; border-radius: 18px; font-size: 14px; }
+      .fire-btn { width: 88px; height: 88px; }
+      .slot { height: 16px; }
+    }
+
+    @media (max-height: 430px) {
+      #app { gap: 7px; }
+      .stat { min-height: 48px; padding: 8px 12px; }
+      .middle { grid-template-columns: 70px minmax(0, 1fr) 90px; }
+      .reload-btn { width: 60px; height: 60px; border-radius: 16px; }
+      .fire-btn { width: 82px; height: 82px; }
+      .status-strip { padding-top: 2px; }
+      .slot { height: 14px; }
+    }
+  </style>
+</head>
+<body>
+  <div id="app">
+    <div class="hud">
+      <div class="stat">
+        <div class="label">확률</div>
+        <div class="value" id="probability">16.7%</div>
+      </div>
+      <div class="stat">
+        <div class="label">남은 칸</div>
+        <div class="value" id="remaining">1 / 6</div>
+      </div>
+    </div>
+
+    <div class="middle">
+      <div class="left-controls">
+        <button class="btn reload-btn" id="reloadBtn" aria-label="재장전">재장전</button>
+      </div>
+
+      <div class="scene">
+        <div class="gun-wrap" id="gunWrap">
+          <svg class="gun-svg" viewBox="0 0 1100 460" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <defs>
+              <linearGradient id="metalDark" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#5a6270"/>
+                <stop offset="35%" stop-color="#2f3440"/>
+                <stop offset="70%" stop-color="#1a1f29"/>
+                <stop offset="100%" stop-color="#636d7b"/>
+              </linearGradient>
+              <linearGradient id="metalLight" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stop-color="#8791a0"/>
+                <stop offset="50%" stop-color="#49505d"/>
+                <stop offset="100%" stop-color="#242a35"/>
+              </linearGradient>
+              <linearGradient id="gripGrad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0%" stop-color="#53342b"/>
+                <stop offset="50%" stop-color="#2f1c18"/>
+                <stop offset="100%" stop-color="#654237"/>
+              </linearGradient>
+              <linearGradient id="shine" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stop-color="rgba(255,255,255,0.0)"/>
+                <stop offset="50%" stop-color="rgba(255,255,255,0.33)"/>
+                <stop offset="100%" stop-color="rgba(255,255,255,0.0)"/>
+              </linearGradient>
+              <filter id="softShadow" x="-30%" y="-30%" width="160%" height="160%">
+                <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="rgba(0,0,0,0.4)"/>
+              </filter>
+            </defs>
+
+            <!-- barrel -->
+            <g filter="url(#softShadow)">
+              <rect x="480" y="150" rx="26" ry="26" width="470" height="78" fill="url(#metalDark)"/>
+              <rect x="500" y="169" rx="12" ry="12" width="410" height="14" fill="rgba(255,255,255,0.14)"/>
+              <rect x="918" y="163" rx="8" ry="8" width="45" height="52" fill="#12161e"/>
+              <rect x="910" y="171" rx="4" ry="4" width="15" height="35" fill="#8e98a5"/>
+            </g>
+
+            <!-- top rail -->
+            <path d="M420 143 L505 110 L870 110 Q890 110 900 124 L900 140 Z" fill="url(#metalLight)"/>
+            <rect x="542" y="122" rx="5" ry="5" width="280" height="9" fill="rgba(255,255,255,0.16)"/>
+
+            <!-- frame body -->
+            <path d="M320 120
+                     C370 110, 395 112, 430 128
+                     L493 154
+                     L493 222
+                     L450 250
+                     C410 275, 360 284, 306 280
+                     L250 276
+                     C220 274, 202 258, 200 233
+                     L196 201
+                     C192 160, 222 130, 275 124 Z"
+                  fill="url(#metalDark)"/>
+
+            <!-- cylinder -->
+            <g>
+              <circle cx="405" cy="191" r="86" fill="url(#metalLight)"/>
+              <circle cx="405" cy="191" r="59" fill="#1e232d"/>
+              <circle cx="405" cy="191" r="15" fill="#747f8e"/>
+              <g fill="#0d1118">
+                <circle cx="405" cy="138" r="11"/>
+                <circle cx="451" cy="164" r="11"/>
+                <circle cx="451" cy="218" r="11"/>
+                <circle cx="405" cy="244" r="11"/>
+                <circle cx="359" cy="218" r="11"/>
+                <circle cx="359" cy="164" r="11"/>
+              </g>
+              <circle cx="405" cy="191" r="73" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="5"/>
+            </g>
+
+            <!-- trigger guard -->
+            <path d="M285 212
+                     C285 254, 320 284, 360 285
+                     L392 285
+                     C405 285, 412 278, 412 268
+                     C412 258, 405 251, 392 251
+                     L360 251
+                     C337 250, 320 234, 319 213
+                     C318 190, 334 172, 362 168
+                     C376 166, 392 170, 401 174
+                     L421 182
+                     C432 186, 443 182, 447 171
+                     C451 160, 447 147, 435 142
+                     C408 131, 384 127, 354 131
+                     C315 136, 285 168, 285 212 Z"
+                  fill="url(#metalDark)"/>
+
+            <!-- trigger -->
+            <path d="M347 185 C334 197, 335 214, 352 226 C362 232, 374 230, 380 224 C372 214, 370 202, 373 187 C365 180, 356 178, 347 185 Z"
+                  fill="#0f131b"/>
+
+            <!-- grip back -->
+            <path d="M250 214
+                     C250 245, 256 283, 268 320
+                     L294 396
+                     C300 414, 318 425, 336 421
+                     L419 402
+                     C438 398, 451 381, 449 361
+                     L441 270
+                     C440 252, 429 237, 412 231
+                     L330 202
+                     C297 191, 269 196, 250 214 Z"
+                  fill="url(#gripGrad)"/>
+            <path d="M279 219 L413 264 L422 378 L324 401 Q313 403 308 391 L277 300 Q263 255 279 219 Z" fill="rgba(255,255,255,0.06)"/>
+            <g stroke="rgba(255,255,255,0.17)" stroke-width="3">
+              <line x1="301" y1="250" x2="395" y2="283"/>
+              <line x1="307" y1="275" x2="399" y2="306"/>
+              <line x1="314" y1="300" x2="403" y2="329"/>
+              <line x1="320" y1="325" x2="406" y2="352"/>
+              <line x1="326" y1="350" x2="408" y2="375"/>
+            </g>
+
+            <!-- front body details -->
+            <rect x="486" y="175" rx="8" ry="8" width="38" height="32" fill="#151a22"/>
+            <path d="M239 156 C248 144 263 136 281 136 L320 136 L320 156 Z" fill="rgba(255,255,255,0.14)"/>
+            <path d="M220 182 C220 165 232 152 248 148 L278 140" stroke="rgba(255,255,255,0.18)" stroke-width="5" stroke-linecap="round"/>
+            <path d="M490 153 L491 228" stroke="rgba(255,255,255,0.15)" stroke-width="3"/>
+
+            <!-- highlights -->
+            <path d="M295 136 C355 126 397 132 448 154" stroke="rgba(255,255,255,0.18)" stroke-width="6" stroke-linecap="round"/>
+            <path d="M492 158 L888 158" stroke="rgba(255,255,255,0.12)" stroke-width="4" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="muzzle-flash" id="muzzleFlash"></div>
+      </div>
+
+      <div class="right-controls">
+        <button class="btn fire-btn" id="fireBtn" aria-label="발사">발사</button>
+      </div>
+    </div>
+
+    <div class="status-strip">
+      <div class="chambers" id="chambers"></div>
+    </div>
+  </div>
+
+  <div class="portrait-lock">가로로 돌려서 사용</div>
+
+  <script>
+    const probabilityEl = document.getElementById('probability');
+    const remainingEl = document.getElementById('remaining');
+    const chambersEl = document.getElementById('chambers');
+    const fireBtn = document.getElementById('fireBtn');
+    const reloadBtn = document.getElementById('reloadBtn');
+    const gunWrap = document.getElementById('gunWrap');
+    const muzzleFlash = document.getElementById('muzzleFlash');
+
+    const TOTAL = 6;
+    let bulletIndex = 0;
+    let currentIndex = 0;
+    let firedIndices = [];
+    let gameOver = false;
+    let audioCtx = null;
+
+    let soundGain = null;
+
+    // Original desktop version audio: same synthesized sound, gain, and limiter.
+    function initAudio() {
+      try {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        if (!audioCtx) {
+          audioCtx = new AC();
+          soundGain = audioCtx.createGain();
+          soundGain.gain.value = 0.765; // original version's default volume 85% × 0.9
+          const limiter = audioCtx.createDynamicsCompressor();
+          limiter.threshold.value = -13;
+          limiter.knee.value = 12;
+          limiter.ratio.value = 6;
+          limiter.attack.value = .002;
+          limiter.release.value = .22;
+          soundGain.connect(limiter);
+          limiter.connect(audioCtx.destination);
+        }
+        if (audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
+        soundGain.gain.setTargetAtTime(0.765, audioCtx.currentTime, .012);
+        return audioCtx;
+      } catch { return null; }
+    }
+
+  function playClick(){
+    const ctx=initAudio();if(!ctx)return;const t=ctx.currentTime;
+    // Two short dry mechanical transients
+    [0,.055].forEach((delay,j)=>{
+      const n=Math.max(1,Math.round(ctx.sampleRate*.055));const buf=ctx.createBuffer(1,n,ctx.sampleRate), arr=buf.getChannelData(0);
+      for(let i=0;i<n;i++)arr[i]=(Math.random()*2-1)*Math.exp(-i/(ctx.sampleRate*(j?.007:.01)));
+      const source=ctx.createBufferSource();source.buffer=buf;const filter=ctx.createBiquadFilter();filter.type='bandpass';filter.frequency.value=j?1800:1100;filter.Q.value=.7;
+      const gain=ctx.createGain();gain.gain.value=.32;source.connect(filter);filter.connect(gain);gain.connect(soundGain);source.start(t+delay);
+    });
+  }
+  function playBang(){
+    const ctx=initAudio();if(!ctx)return;const t=ctx.currentTime,sr=ctx.sampleRate;
+    // Impact + rolling low-frequency body, synthesized offline to work without internet.
+    const len=Math.round(sr*.86),buffer=ctx.createBuffer(1,len,sr),samples=buffer.getChannelData(0);
+    let low=0;
+    for(let i=0;i<len;i++){
+      const sec=i/sr,white=Math.random()*2-1;
+      low=low*.93+white*.07;
+      const crack=white*Math.exp(-sec/0.042)*.96;
+      const tail=(white*.18+low*.7)*Math.exp(-sec/.25);
+      samples[i]=(crack+tail)*.9;
+    }
+    const noise=ctx.createBufferSource();noise.buffer=buffer;
+    const shelf=ctx.createBiquadFilter();shelf.type='lowpass';shelf.frequency.setValueAtTime(7200,t);shelf.frequency.exponentialRampToValueAtTime(480,t+.75);noise.connect(shelf);shelf.connect(soundGain);noise.start(t);
+    const osc=ctx.createOscillator();osc.type='triangle';osc.frequency.setValueAtTime(145,t);osc.frequency.exponentialRampToValueAtTime(37,t+.18);
+    const impact=ctx.createGain();impact.gain.setValueAtTime(.65,t);impact.gain.exponentialRampToValueAtTime(.001,t+.23);
+    osc.connect(impact);impact.connect(soundGain);osc.start(t);osc.stop(t+.24);
+    const high=ctx.createOscillator();high.type='sawtooth';high.frequency.setValueAtTime(900,t);high.frequency.exponentialRampToValueAtTime(100,t+.045);
+    const hg=ctx.createGain();hg.gain.setValueAtTime(.12,t);hg.gain.exponentialRampToValueAtTime(.001,t+.055);high.connect(hg);hg.connect(soundGain);high.start(t);high.stop(t+.06);
+  }
+
+    function animateGun(hit) {
+      gunWrap.classList.add('recoil');
+      if (hit) {
+        muzzleFlash.classList.remove('show');
+        void muzzleFlash.offsetWidth;
+        muzzleFlash.classList.add('show');
+      }
+      setTimeout(() => gunWrap.classList.remove('recoil'), 140);
+      if (hit) setTimeout(() => muzzleFlash.classList.remove('show'), 260);
+    }
+
+    function updateHUD() {
+      const remainingShots = TOTAL - currentIndex;
+      const probability = gameOver && currentIndex > bulletIndex ? 0 : (remainingShots > 0 ? (1 / remainingShots) * 100 : 0);
+      probabilityEl.textContent = `${probability.toFixed(1)}%`;
+      remainingEl.textContent = `${Math.min(currentIndex + 1, TOTAL)} / ${TOTAL}`;
+    }
+
+    function renderChambers() {
+      chambersEl.innerHTML = '';
+      for (let i = 0; i < TOTAL; i++) {
+        const slot = document.createElement('div');
+        slot.className = 'slot';
+        if (i === currentIndex && !gameOver) slot.classList.add('current');
+        if (firedIndices.includes(i)) slot.classList.add('emptyHit');
+        if (gameOver && i === bulletIndex) slot.className = 'slot bullet';
+        chambersEl.appendChild(slot);
+      }
+    }
+
+    function setButtons() {
+      fireBtn.classList.toggle('disabled', gameOver);
+      reloadBtn.classList.toggle('disabled', false);
+      fireBtn.disabled = gameOver;
+    }
+
+    function resetGame() {
+      bulletIndex = Math.floor(Math.random() * TOTAL);
+      currentIndex = 0;
+      firedIndices = [];
+      gameOver = false;
+      updateHUD();
+      renderChambers();
+      setButtons();
+    }
+
+    function fire() {
+      if (gameOver) return;
+      initAudio();
+
+      const isBullet = currentIndex === bulletIndex;
+      if (isBullet) {
+        playBang();
+        animateGun(true);
+        gameOver = true;
+      } else {
+        playClick();
+        animateGun(false);
+        firedIndices.push(currentIndex);
+        currentIndex++;
+        if (currentIndex >= TOTAL) {
+          gameOver = true;
+        }
+      }
+      updateHUD();
+      renderChambers();
+      setButtons();
+    }
+
+    fireBtn.addEventListener('click', fire, { passive: true });
+    reloadBtn.addEventListener('click', () => { initAudio(); resetGame(); }, { passive: true });
+
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'Space' || e.code === 'Enter') {
+        e.preventDefault();
+        fire();
+      } else if (e.key.toLowerCase() === 'r') {
+        resetGame();
+      }
+    });
+
+    resetGame();
+  </script>
+</body>
+</html>
